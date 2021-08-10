@@ -1,0 +1,78 @@
+WITH 
+table_1 as (
+-- Profit from ticket sales
+SELECT 
+    tf.flight_id, sum(tf.amount) as ticket_amount
+FROM dst_project.ticket_flights tf
+GROUP BY
+    tf.flight_id
+    
+UNION 
+
+select fv.flight_id, count(distinct s.seat_no) * 41796.87 as ticket_amount
+from dst_project.flights_v fv
+    left join dst_project.aircrafts air on fv.aircraft_code = air.aircraft_code
+    left join dst_project.seats s on fv.aircraft_code = s.aircraft_code
+
+where departure_airport = 'AAQ'
+and arrival_airport = 'NOZ'
+and s.aircraft_code = '733'
+and s.fare_conditions = 'Business'
+group by fv.flight_id
+
+UNION
+
+select fv.flight_id, count(distinct s.seat_no) * 13982.37 as ticket_amount
+from dst_project.flights_v fv
+    left join dst_project.aircrafts air on fv.aircraft_code = air.aircraft_code
+    left join dst_project.seats s on fv.aircraft_code = s.aircraft_code
+where departure_airport = 'AAQ'
+and arrival_airport = 'NOZ'
+and s.aircraft_code = '733'
+and s.fare_conditions = 'Economy'
+group by fv.flight_id),
+    
+    table_2 AS (
+-- Flight duration
+SELECT
+    fv.flight_id,
+    (EXTRACT(HOUR FROM fv.actual_duration)+
+    (EXTRACT(minute FROM fv.actual_duration)/60)) as duration
+FROM dst_project.flights_v fv),
+
+    table_3 AS (
+-- Fuel costs
+SELECT
+    air.aircraft_code,
+    1.7 * 42700 as hour_costs
+FROM dst_project.aircrafts air
+WHERE air.aircraft_code = 'SU9'
+union all    
+    SELECT
+    air.aircraft_code,
+    2.4 * 42700 as hour_costs
+FROM dst_project.aircrafts air
+WHERE air.aircraft_code = '733')
+
+SELECT 
+    table_1.flight_id,
+    fv.departure_airport, 
+    fv.arrival_airport,
+    sum(table_1.ticket_amount) as ticket_amount,
+    table_2.duration,
+    table_3.hour_costs * table_2.duration as fuel_costs,
+    sum(table_1.ticket_amount) - (table_3.hour_costs * table_2.duration) as "profit_from_the_flight"
+FROM dst_project.flights_v fv
+    LEFT JOIN table_1 ON fv.flight_id = table_1.flight_id
+    LEFT JOIN table_2 ON fv.flight_id = table_2.flight_id
+    LEFT JOIN table_3 ON fv.aircraft_code = table_3.aircraft_code
+WHERE fv.departure_airport = 'AAQ'
+  AND (date_trunc('month', fv.scheduled_departure)in
+  ('2017-01-01','2017-02-01', '2017-12-01'))
+  AND fv.status not in ('Cancelled')
+group by 
+         table_1.flight_id,
+         fv.departure_airport,
+         fv.arrival_airport,
+         table_2.duration,
+         table_3.hour_costs
